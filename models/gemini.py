@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 import google as genai
 from google.genai import Client, types
@@ -31,27 +31,38 @@ class Gemini(Model):
             raise ValueError("GEMINI_API_KEY environment variable is not set")
         
         self.model = model_id
-    
-    def query(self, input_text: str, **kwargs) -> str:
-        """Query the Gemini model.
+        
+    def query(self, input_text: str, **kwargs) -> Dict[str, Any]:
+        """Query the Gemini model and return both text and token usage.
         
         Args:
             input_text: The prompt to send to the model
             **kwargs: Generation parameters (temperature, max_output_tokens, etc.)
         
         Returns:
-            Model response as a string
+            Dictionary with 'text' and 'usage' keys containing:
+            - text: Model response as a string
+            - usage: Dictionary with token usage information
         
         Raises:
             Exception: If API call fails
         """
         try:
+            generation_config = genai.types.GenerationConfig(**kwargs) if kwargs else None
             with Client() as client:
                 response = client.models.generate_content(
                     model=self.model_id,
-                    contents=input_text
+                    contents=input_text,
+                    config=generation_config
                 )
-            return response.text
+            return {
+                "text": response.text,
+                "usage": {
+                    "prompt_tokens": response.usage_metadata.prompt_token_count,
+                    "candidates_tokens": response.usage_metadata.candidates_token_count,
+                    "total_tokens": response.usage_metadata.total_token_count
+                }
+            }
         except Exception as e:
             raise Exception(f"Gemini API error: {str(e)}")
     
