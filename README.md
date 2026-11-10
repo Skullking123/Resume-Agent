@@ -33,6 +33,7 @@ An agent that helps you better your resume
 - Subagents
 - Modular
 - Should be model agnostic (optional)
+- Write tests to validate skills 
 
 
 # MVP:

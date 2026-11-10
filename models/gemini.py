@@ -77,3 +77,4 @@ class Gemini(Model):
             return api_key is not None
         except Exception:
             return False
+
