@@ -1,6 +1,4 @@
-from models.gemini import Gemini
-from enum import Enum
-
+from constants.ModelFamily import ModelFamilyEnum
 
 class InvalidModelFamilyError(Exception):
   """Raised when an unsupported model family is requested."""
@@ -10,16 +8,12 @@ class InvalidModelFamilyError(Exception):
     super().__init__(message)
 
 
-# Enums for model Family
-class ModelFamily(Enum):
-  GEMINI = 1
-
-
 class ModelFactory:
   
-  def createModel(model_family: ModelFamily, model_id: str, **kwargs: any):
+  def createModel(model_family: ModelFamilyEnum, model_id: str, **kwargs: any):
     match model_family:
-      case ModelFamily.GEMINI:
+      case ModelFamilyEnum.GEMINI:
+        from models.gemini import Gemini
         return Gemini(model_id, **kwargs)
       case _:
         raise InvalidModelFamilyError(model_family)

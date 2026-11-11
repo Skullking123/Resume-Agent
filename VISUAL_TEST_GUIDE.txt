@@ -1,0 +1,274 @@
+================================================================================
+                    FUNCTION CALLING TEST SUITE - VISUAL GUIDE
+================================================================================
+
+PROJECT STRUCTURE:
+==================
+
+Resume-Agent/
+├── main.py                          ← UPDATED: Test Suite
+├── models/
+│   ├── gemini.py                    ← UPDATED: query() with tool-calling loop
+│   ├── model.py                     (Base class)
+│   └── model_factory.py             (Factory pattern)
+├── constants/
+│   └── ParameterTypes.py            (Enum for tool parameter types)
+├── FUNCTION_CALLING_GUIDE.md        ← NEW: Feature documentation
+├── TESTING_GUIDE.md                 ← NEW: How to run tests
+└── TEST_SUMMARY.md                  ← NEW: Summary of tests
+
+================================================================================
+                              TEST EXECUTION FLOW
+================================================================================
+
+START
+  │
+  ├─→ Create Gemini Model (gemini-3.8-flash)
+  │
+  ├─→ [TEST 1] Basic Query (No Tools)
+  │   │
+  │   └─→ Query: "Hello, introduce yourself"
+  │       Response: [Simple text response]
+  │       Tool Calls: None
+  │
+  ├─→ [TOOL REGISTRATION]
+  │   │
+  │   ├─→ Register: get_weather
+  │   │   Params: location (string, required), unit (enum: C/F, optional)
+  │   │
+  │   ├─→ Register: calculate_distance
+  │   │   Params: city1 (string, required), city2 (string, required)
+  │   │
+  │   ├─→ Register: add_numbers
+  │   │   Params: a (number, required), b (number, required)
+  │   │
+  │   └─→ Register: multiply_numbers
+  │       Params: a (number, required), b (number, required)
+  │
+  ├─→ [TEST 2] Weather Query (Single Tool, Multiple Calls)
+  │   │
+  │   └─→ Query: "Weather in Paris and London?"
+  │       │
+  │       ├─→ API Call 1
+  │       │   Model: "I'll get the weather..."
+  │       │   Tool Call: get_weather(location="Paris", unit="C")
+  │       │   Result: "22°C, Partly Cloudy..."
+  │       │
+  │       ├─→ API Call 2 (with results from Call 1)
+  │       │   Model: "Got Paris weather. Now London..."
+  │       │   Tool Call: get_weather(location="London", unit="C")
+  │       │   Result: "18°C, Rainy..."
+  │       │
+  │       └─→ API Call 3 (with both results)
+  │           Model: "Based on the data..."
+  │           Final Response: [Complete answer with both cities]
+  │           Tool Calls: [get_weather x2]
+  │
+  ├─→ [TEST 3] Math Query (Multiple Tools, Chained)
+  │   │
+  │   └─→ Query: "What is (15 + 8) * 3?"
+  │       │
+  │       ├─→ API Call 1
+  │       │   Model: "I need to calculate this step by step"
+  │       │   Tool Call 1: add_numbers(a=15, b=8)
+  │       │   Result: "23"
+  │       │
+  │       ├─→ API Call 2 (with result from step 1)
+  │       │   Model: "Now I'll multiply..."
+  │       │   Tool Call 2: multiply_numbers(a=23, b=3)
+  │       │   Result: "69"
+  │       │
+  │       └─→ API Call 3 (with both results)
+  │           Model: "The answer is 69"
+  │           Final Response: [Complete calculation explanation]
+  │           Tool Calls: [add_numbers, multiply_numbers]
+  │
+  ├─→ [TEST 4] Distance Query (Tool Reuse)
+  │   │
+  │   └─→ Query: "Distance Paris→Tokyo and NY→London?"
+  │       │
+  │       ├─→ API Call 1
+  │       │   Tool Call 1: calculate_distance("Paris", "Tokyo")
+  │       │   Result: "9,730 km"
+  │       │
+  │       ├─→ API Call 2 (with result from Call 1)
+  │       │   Tool Call 2: calculate_distance("New York", "London")
+  │       │   Result: "5,570 km"
+  │       │
+  │       └─→ API Call 3 (with both results)
+  │           Final Response: [Both distances with comparison]
+  │           Tool Calls: [calculate_distance x2]
+  │
+  └─→ END - Display Summary
+      Print: ✓ All tests complete
+      Print: Total tokens used across all tests
+      Print: Summary of tool calls
+
+================================================================================
+                              RESPONSE STRUCTURE
+================================================================================
+
+BEFORE (Old query function):
+  {
+    "text": "...",
+    "usage": {
+      "prompt_tokens": 150,
+      "candidates_tokens": 50,
+      "total_tokens": 200
+    }
+  }
+
+AFTER (New query function with tool calling):
+  {
+    "text": "Final model response after all tool calls",
+    "usage": {
+      "prompt_tokens": 450,        ← Accumulated from all API calls
+      "candidates_tokens": 200,    ← Accumulated from all API calls
+      "total_tokens": 650          ← Total across entire loop
+    },
+    "tool_calls": [                ← NEW: Track all tool executions
+      {
+        "tool": "get_weather",
+        "args": {"location": "Paris", "unit": "C"},
+        "result": "22°C, Partly Cloudy, Humidity: 65%",
+        "success": True
+      },
+      {
+        "tool": "get_weather",
+        "args": {"location": "London", "unit": "C"},
+        "result": "18°C, Rainy, Humidity: 80%",
+        "success": True
+      }
+    ]
+  }
+
+================================================================================
+                              TOOL DEFINITIONS
+================================================================================
+
+Tool 1: get_weather
+├─ Purpose: Get current weather for a city
+├─ Parameters:
+│  ├─ location (string, required): "Paris", "London", "Tokyo", "New York"
+│  └─ unit (enum, optional): "C" or "F" (default: "C")
+└─ Returns: "22°C, Partly Cloudy, Humidity: 65%"
+
+Tool 2: calculate_distance
+├─ Purpose: Get distance between two cities
+├─ Parameters:
+│  ├─ city1 (string, required): First city
+│  └─ city2 (string, required): Second city
+└─ Returns: "9,730 km"
+
+Tool 3: add_numbers
+├─ Purpose: Add two numbers
+├─ Parameters:
+│  ├─ a (number, required): First number
+│  └─ b (number, required): Second number
+└─ Returns: "23"
+
+Tool 4: multiply_numbers
+├─ Purpose: Multiply two numbers
+├─ Parameters:
+│  ├─ a (number, required): First number
+│  └─ b (number, required): Second number
+└─ Returns: "69"
+
+================================================================================
+                              EXPECTED OUTPUT
+================================================================================
+
+$ python main.py
+
+======================================================================
+GEMINI FUNCTION CALLING TEST
+======================================================================
+
+[Test 1] Basic Query (No Tools)
+------
+Response: I'm Claude, an AI assistant made by Anthropic...
+Tokens Used: 145
+
+[Registering Tools]
+------
+✓ Registered: get_weather
+✓ Registered: calculate_distance
+✓ Registered: add_numbers
+✓ Registered: multiply_numbers
+
+[Test 2] Weather Query (Should Use Tools)
+------
+Response: Based on the current weather data, Paris is experiencing 
+partly cloudy conditions at 22°C with 65% humidity, while London is 
+rainy with 18°C and 80% humidity.
+
+Tokens Used: 425
+
+Tools Called (2):
+  1. get_weather({"location": "Paris", "unit": "C"})
+     → Result: 22°C, Partly Cloudy, Humidity: 65%
+     → Success: True
+  2. get_weather({"location": "London", "unit": "C"})
+     → Result: 18°C, Rainy, Humidity: 80%
+     → Success: True
+
+[Test 3] Math Query (Should Use Multiple Tools)
+------
+Response: To solve (15 + 8) * 3, I first add 15 + 8 to get 23, 
+then multiply 23 * 3 to get 69. Therefore, the answer is 69.
+
+Tokens Used: 380
+
+Tools Called (2):
+  1. add_numbers({"a": 15, "b": 8})
+     → Result: 23
+     → Success: True
+  2. multiply_numbers({"a": 23, "b": 3})
+     → Result: 69
+     → Success: True
+
+[Test 4] Distance Query (Should Use Tools)
+------
+Response: The distance from Paris to Tokyo is 9,730 km, while the 
+distance from New York to London is 5,570 km. Paris to Tokyo is 
+significantly further - about 1.7 times the distance.
+
+Tokens Used: 410
+
+Tools Called (2):
+  1. calculate_distance({"city1": "Paris", "city2": "Tokyo"})
+     → Result: 9,730 km
+     → Success: True
+  2. calculate_distance({"city1": "New York", "city2": "London"})
+     → Result: 5,570 km
+     → Success: True
+
+======================================================================
+TEST COMPLETE
+======================================================================
+
+================================================================================
+                              KEY METRICS
+================================================================================
+
+Total API Calls Made: 13 (1 for Test 1 + 10 for Tests 2-4 + 2 extra)
+Total Tools Registered: 4
+Total Tool Invocations: 6
+Total Tokens Used: ~1,360
+
+================================================================================
+                              SUCCESS CRITERIA
+================================================================================
+
+✓ All syntax checks pass
+✓ Model initializes successfully
+✓ Tools are registered without errors
+✓ Test 1 returns response without tool calls
+✓ Test 2 returns response with 2 tool calls
+✓ Test 3 returns response with 2 chained tool calls
+✓ Test 4 returns response with 2 tool calls
+✓ All tool results are captured in response
+✓ Token usage is accumulated correctly
+✓ Success flags are tracked for each tool call
+
+================================================================================
